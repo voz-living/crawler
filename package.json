@@ -1,0 +1,32 @@
+{
+  "name": "voz-crawler",
+  "version": "1.0.0",
+  "description": "voz-crlawer",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/voz-living/crawler.git"
+  },
+  "keywords": [
+    "voz",
+    "crawler"
+  ],
+  "author": "Le Khoi-Phong",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/voz-living/crawler/issues"
+  },
+  "homepage": "https://github.com/voz-living/crawler#readme",
+  "dependencies": {
+    "cheerio": "^0.22.0",
+    "commander": "^2.9.0",
+    "request": "^2.78.0"
+  },
+  "devDependencies": {
+    "eslint": "^3.10.0",
+    "eslint-config-google": "^0.7.0"
+  }
+}
