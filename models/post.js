@@ -1,21 +1,22 @@
 module.exports = {
   'new': function newPost() {
     return {
-      url: String,
-      id: Number,
-      threadId: Number,
-      num: Number,
-      datetime: Date,
+      url: '',
+      id: -1,
+      tid: -1,
+      num: -1,
+      datetime: null,
       user: {
-        img: String,
-        name: String,
-        title: String,
-        joinDate: Date,
-        posts: Number,
+        img: null,
+        name: '',
+        title: '',
+        joinDate: null,
+        posts: null,
       },
+      title: '',
       content: {
-        html: String,
-        text: String,
+        html: '',
+        text: '',
       },
     };
   },

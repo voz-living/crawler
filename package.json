@@ -23,6 +23,7 @@
   "dependencies": {
     "cheerio": "^0.22.0",
     "commander": "^2.9.0",
+    "js-yaml": "^3.7.0",
     "lodash": "^4.16.6",
     "request": "^2.78.0"
   },

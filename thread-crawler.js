@@ -3,10 +3,12 @@ const cheerio = require('cheerio');
 const _ = require('lodash');
 
 const request = require('utils/request');
+const wait = require('utils/wait');
 const generateUrl = require('utils/generate-url');
 const parseDateTime = require('utils/datetime').parse;
 
 const postModel = require('models/post');
+const {loadThreadDocument, updateThreadDocument} = require('io/thread');
 
 program
   .version('1.0.0')
@@ -27,23 +29,77 @@ const {thread: tid, page: pageNum, dryRun} = program;
  */
 async function threadCrawler(tid=null, pageNum = -1, dryRun=false) {
   if (tid === null) throw new Error('missing thread id');
-  const html = await request(generateUrl.thread(tid, pageNum));
-  const $ = cheerio.load(html);
-  const thread = parseThread($);
+  const queue = [];
+  let crawlAll = false;
+  if (pageNum === -1) {
+    crawlAll = true;
+  }
+
+  const threadDoc = await loadThreadDocument(tid);
+  if (crawlAll) {
+    pageNum = threadDoc.progress.page + 1;
+  }
+  if (threadDoc._fresh === true) {
+    threadDoc.id = tid;
+    threadDoc.url = generateUrl.thread(tid);
+  }
+
+  queue.push(pageNum);
+  do {
+    let currentPageNum = queue.shift();
+    const html = await request(generateUrl.thread(tid, currentPageNum));
+    const $ = cheerio.load(html);
+    let skippedPageInfo = true;
+    if (pageNum === 1) {
+      skippedPageInfo = false;
+    }
+    const {pages, posts} = parseThreadPage($, {skippedPageInfo, tid});
+    console.log(`Parsed page with ${posts.length} posts`);
+    updateThreadDocWithPosts({threadDoc, posts, pages});
+    threadDoc.progress.page = currentPageNum;
+    console.log(`Update progress to page ${currentPageNum}\n`);
+    console.log('Start to write to storage');
+    try {
+      await updateThreadDocument(threadDoc, {posts});
+    } catch (e) {
+      throw e;
+    }
+    if (currentPageNum < threadDoc.pages && crawlAll) {
+      const nextPage = currentPageNum + 1;
+      queue.push(nextPage);
+      console.log(`Process to next page ${nextPage} [${queue.length}]`);
+    }
+
+    await wait(1000);
+  } while (queue.length > 0);
+}
+
+function updateThreadDocWithPosts({threadDoc, posts, pages}) {
+  if (threadDoc._fresh === true) {
+    threadDoc.pages = pages;
+    threadDoc._fresh = false;
+    threadDoc.title = posts[0].title;
+    threadDoc.createdDate = posts[0].datetime;
+  }
+
+  threadDoc.updatedDate = posts[posts.length - 1].datetime;
+  threadDoc.posts.push(...posts.map((p) => p.id));
 }
 
 /**
+ * parse one page of thread
  * @param {any} $
+ * @return {Object} ThreadPage
  */
-function parseThread($, {skippedPageInfo=true} = {}) {
+function parseThreadPage($, {skippedPageInfo=true, tid=-1} = {}) {
   // parse thread information
   let pages = null;
-  if(!skippedPageInfo) pages = parseThreadInformation($);
+  if(!skippedPageInfo) pages = parseThreadInformation($).pages;
   const posts = [];
   // parse posts
   $('#posts > div').each(function(i, element) {
     const $this = $(this);
-    posts[i] = parsePost($this);
+    posts[i] = parsePost($this, {tid});
   });
   return {
     pages,
@@ -61,7 +117,7 @@ function parseThreadInformation($) {
   if($nav.length !== 0) {
     const text = $nav.text();
     const [, num] = text.match(/Page \d+ of (\d+)/);
-    pages = num;
+    pages = parseInt(num);
   }
   return {pages};
 }
@@ -72,11 +128,12 @@ function parseThreadInformation($) {
  * @param {cheerio} cheerio document object
  * @return {Post} parsed Post
  */
-function parsePost($) {
+function parsePost($, {tid}) {
   const post = postModel.new();
+  post.tid = tid;
   const $post = $.find('table[id^="post"]');
   const [, postId] = $post.attr('id').match(/post(\d+)/);
-  post.id = postId;
+  post.id = parseInt(postId);
 
   const $head = $post.find('td.thead');
   const $postCount = $head.find('[id^="postcount"]');
@@ -103,7 +160,6 @@ function parsePost($) {
   post.user.title = $userInfo.eq(1).text().trim();
 
   const $userMeta = $user.eq(_next + 2).find('> div > div');
-  console.log($userMeta.text());
   const jd = $userMeta.eq(0).text().trim().split(':')[1].trim().split('-');
   post.user.joinDate = new Date(jd[1], jd[0], 1, 0, 0, 0);
   post.user.posts = parseInt($userMeta.eq(1).text().split(':')[1]
@@ -111,6 +167,8 @@ function parsePost($) {
   // end process user info
 
   const $content = $userNcontent.eq(2).find('div[id^="post_message"]');
+  post.title = $userNcontent.eq(2)
+                .find('td[id^="td_post_"] > div').eq(0).text().trim();
   post.content.html = $content.html();
   post.content.text = $content.text().trim();
 
