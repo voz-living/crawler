@@ -1,9 +1,12 @@
 const program = require('commander');
 const cheerio = require('cheerio');
+const _ = require('lodash');
 
 const request = require('utils/request');
 const generateUrl = require('utils/generate-url');
 const parseDateTime = require('utils/datetime').parse;
+
+const postModel = require('models/post');
 
 program
   .version('1.0.0')
@@ -32,16 +35,20 @@ async function threadCrawler(tid=null, pageNum = -1, dryRun=false) {
 /**
  * @param {any} $
  */
-function parseThread($) {
+function parseThread($, {skippedPageInfo=true} = {}) {
   // parse thread information
-  const {pages} = parseThreadInformation($);
+  let pages = null;
+  if(!skippedPageInfo) pages = parseThreadInformation($);
   const posts = [];
   // parse posts
   $('#posts > div').each(function(i, element) {
     const $this = $(this);
-    parsePost($this);
+    posts[i] = parsePost($this);
   });
-  return {};
+  return {
+    pages,
+    posts,
+  };
 }
 
 
@@ -59,15 +66,55 @@ function parseThreadInformation($) {
   return {pages};
 }
 
-function parsePost($) {
-  const $post = $.find('[id^="post"]');
-  const [, postId] = $post.attr('id').match(/post(\d+)/);
 
-  const $head = $post.find('td.thead')
-  const postNum = parseInt($head.find('[id^="postcount"]').text());
+/**
+ * parse post from cheerio object
+ * @param {cheerio} cheerio document object
+ * @return {Post} parsed Post
+ */
+function parsePost($) {
+  const post = postModel.new();
+  const $post = $.find('table[id^="post"]');
+  const [, postId] = $post.attr('id').match(/post(\d+)/);
+  post.id = postId;
+
+  const $head = $post.find('td.thead');
+  const $postCount = $head.find('[id^="postcount"]');
+  post.url = $postCount.attr('href');
+  post.num = parseInt($postCount.text());
   const datetimeStr = $head.find('> div').eq(1).text().trim();
-  const datetime = parseDateTime(datetimeStr); 
-  console.log(datetimeStr, datetime.toString());
+  post.datetime = parseDateTime(datetimeStr);
+
+  const $userNcontent = $post.find('> tr');
+  // process user info
+  const $user = $userNcontent.eq(1).find('table tr > td');
+  post.user.img = $user.eq(0).find('a > img').attr('src');
+
+  let _next = 1;
+  if (_.isUndefined(post.user.img)) {
+    post.user.img = null;
+    _next = 0;
+  }
+  const $userInfo = $user.eq(_next).find(' > div');
+  const $userName = $userInfo.eq(0).find('.bigusername');
+  const [, userId] = $userName.attr('href').match(/u=(\d+)/);
+  post.user.id = userId;
+  post.user.name = $userName.text().trim();
+  post.user.title = $userInfo.eq(1).text().trim();
+
+  const $userMeta = $user.eq(_next + 2).find('> div > div');
+  console.log($userMeta.text());
+  const jd = $userMeta.eq(0).text().trim().split(':')[1].trim().split('-');
+  post.user.joinDate = new Date(jd[1], jd[0], 1, 0, 0, 0);
+  post.user.posts = parseInt($userMeta.eq(1).text().split(':')[1]
+                                                .trim().replace(/,/g, ''));
+  // end process user info
+
+  const $content = $userNcontent.eq(2).find('div[id^="post_message"]');
+  post.content.html = $content.html();
+  post.content.text = $content.text().trim();
+
+  return post;
 }
 
 threadCrawler(tid, pageNum, dryRun);

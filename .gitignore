@@ -30,6 +30,7 @@ build/Release
 !node_modules/
 node_modules/*
 !node_modules/utils
+!node_modules/models
 
 jspm_packages
 
