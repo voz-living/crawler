@@ -37,7 +37,10 @@ async function threadCrawler(tid=null, pageNum = -1, dryRun=false) {
 
   const threadDoc = await loadThreadDocument(tid);
   if (crawlAll) {
-    pageNum = threadDoc.progress.page + 1;
+    pageNum = threadDoc.progress.page;
+    if (threadDoc.progress.page === 10) {
+      pageNum++;
+    }
   }
   if (threadDoc._fresh === true) {
     threadDoc.id = tid;
@@ -49,14 +52,10 @@ async function threadCrawler(tid=null, pageNum = -1, dryRun=false) {
     let currentPageNum = queue.shift();
     const html = await request(generateUrl.thread(tid, currentPageNum));
     const $ = cheerio.load(html);
-    let skippedPageInfo = true;
-    if (pageNum === 1) {
-      skippedPageInfo = false;
-    }
-    const {pages, posts} = parseThreadPage($, {skippedPageInfo, tid});
+
+    const {pages, posts} = parseThreadPage($, {tid});
     console.log(`Parsed page with ${posts.length} posts`);
-    updateThreadDocWithPosts({threadDoc, posts, pages});
-    threadDoc.progress.page = currentPageNum;
+    updateThreadDocWithPosts({threadDoc, posts, pages, currentPageNum});
     console.log(`Update progress to page ${currentPageNum}\n`);
     console.log('Start to write to storage');
     try {
@@ -74,16 +73,26 @@ async function threadCrawler(tid=null, pageNum = -1, dryRun=false) {
   } while (queue.length > 0);
 }
 
-function updateThreadDocWithPosts({threadDoc, posts, pages}) {
+
+/**
+ * Decide how threadDoc will be updated according to new crawled posts
+ * @param {Object} Object contains {threadDoc, posts, pages}
+ * @return {void} the threadDoc will be modified
+ */
+function updateThreadDocWithPosts({threadDoc, posts, pages, currentPageNum}) {
   if (threadDoc._fresh === true) {
-    threadDoc.pages = pages;
     threadDoc._fresh = false;
     threadDoc.title = posts[0].title;
     threadDoc.createdDate = posts[0].datetime;
   }
 
+  threadDoc.pages = pages;
+  threadDoc._updatedDate = new Date();
   threadDoc.updatedDate = posts[posts.length - 1].datetime;
   threadDoc.posts.push(...posts.map((p) => p.id));
+  threadDoc.progress.page = currentPageNum;
+  threadDoc.progress.post = posts.length;
+  return;
 }
 
 /**
@@ -91,10 +100,9 @@ function updateThreadDocWithPosts({threadDoc, posts, pages}) {
  * @param {any} $
  * @return {Object} ThreadPage
  */
-function parseThreadPage($, {skippedPageInfo=true, tid=-1} = {}) {
+function parseThreadPage($, {tid=-1} = {}) {
   // parse thread information
-  let pages = null;
-  if(!skippedPageInfo) pages = parseThreadInformation($).pages;
+  const pages = parseThreadInformation($).pages;
   const posts = [];
   // parse posts
   $('#posts > div').each(function(i, element) {

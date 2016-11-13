@@ -2,6 +2,7 @@ module.exports = {
   'new': function newThread() {
     return {
       _fresh: true,
+      _updatedDate: new Date(),
 
       url: '',
       id: -1,
@@ -16,6 +17,7 @@ module.exports = {
       postCount: null,
       progress: {
         page: 0,
+        post: 10,
       },
     };
   },
