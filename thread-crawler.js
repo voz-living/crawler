@@ -70,7 +70,7 @@ async function threadCrawler(tid=null, pageNum = -1, dryRun=false) {
       console.log(`Process to next page ${nextPage} [${queue.length}]`);
     }
 
-    await wait(1000);
+    await wait(300);
   } while (queue.length > 0);
 }
 
