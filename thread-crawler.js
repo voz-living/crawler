@@ -1,4 +1,4 @@
-const program = require('commander');
+
 const cheerio = require('cheerio');
 const _ = require('lodash');
 
@@ -9,16 +9,6 @@ const parseDateTime = require('utils/datetime').parse;
 
 const postModel = require('models/post');
 const {loadThreadDocument, updateThreadDocument} = require('io/thread');
-
-program
-  .version('1.0.0')
-  .option('-t, --thread <n>', 'Thread Id', parseInt)
-  .option('-p, --page <n>', 'Page number', parseInt)
-  .option('-d, --dry-run', 'Dry run')
-  .parse(process.argv);
-
-const {thread: tid, page: pageNum, dryRun} = program;
-
 
 /**
  * threadCrawler
@@ -56,7 +46,6 @@ async function threadCrawler(tid=null, pageNum = -1, dryRun=false) {
     const {pages, posts} = parseThreadPage($, {tid});
     console.log(`Parsed page with ${posts.length} posts`);
     updateThreadDocWithPosts({threadDoc, posts, pages, currentPageNum});
-    console.log(`Update progress to page ${currentPageNum}\n`);
     console.log('Start to write to storage');
     try {
       await updateThreadDocument(threadDoc, {posts});
@@ -92,6 +81,9 @@ function updateThreadDocWithPosts({threadDoc, posts, pages, currentPageNum}) {
   threadDoc.posts.push(...posts.map((p) => p.id));
   threadDoc.progress.page = currentPageNum;
   threadDoc.progress.post = posts.length;
+  /* eslint-disable max-len */
+  console.log(`Update progress to page ${threadDoc.progress.page} (${threadDoc.progress.post})`);
+  /* eslint-enable max-len */
   return;
 }
 
@@ -183,5 +175,19 @@ function parsePost($, {tid}) {
   return post;
 }
 
-threadCrawler(tid, pageNum, dryRun);
+if (require.main === module) {
+  const program = require('commander');
+  program
+    .version('1.0.0')
+    .option('-t, --thread <n>', 'Thread Id', parseInt)
+    .option('-p, --page <n>', 'Page number', parseInt)
+    .option('-d, --dry-run', 'Dry run')
+    .parse(process.argv);
+
+  const {thread: tid, page: pageNum, dryRun} = program;
+  threadCrawler(tid, pageNum, dryRun);
+} else {
+  module.exports = threadCrawler;
+}
+
 

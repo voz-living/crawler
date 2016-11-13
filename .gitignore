@@ -31,6 +31,9 @@ build/Release
 node_modules/*
 !node_modules/utils
 !node_modules/models
+!node_modules/io
+!node_modules/parsers
+!node_modules/constants
 
 jspm_packages
 

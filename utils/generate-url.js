@@ -6,4 +6,11 @@ module.exports = {
     }
     return url;
   },
+  forum: function generateForumUrl(fid, {order = 'desc', pageNum = -1} = {}) {
+    let url = `https://vozforums.com/forumdisplay.php?f=${fid}`;
+    if (pageNum !== -1) {
+      url += `&order=${order}&page=${pageNum}`;
+    }
+    return url;
+  },
 };
